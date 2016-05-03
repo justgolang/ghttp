@@ -15,12 +15,11 @@ type (
 	Server struct {
 		httpServer        *http.Server
 		isGracefulRestart bool
-		listener          *Listener
 	}
 )
 
 const (
-	gracefulRestartKey = "gogracefully"
+	gracefulRestartKey = "gracego"
 )
 
 var (
@@ -55,9 +54,10 @@ func (srv *Server) ListenAndServe() error {
 	err = srv.httpServer.Serve(ln)
 
 	//listener close后　wait老连接处理完毕
-	log.Println("waiting for close")
+	log.Printf("waiting for connection close...")
 	ln.Wait()
-	log.Println("old connection has closed")
+	log.Printf("all connection closed, process with pid %d is shutting down...", os.Getpid())
+
 	return err
 }
 
@@ -66,16 +66,17 @@ func handleSignals(ln *Listener) {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGUSR2)
 	for sig := range signals {
 		if sig == syscall.SIGTERM {
-
+			log.Printf("got signal TERM, shuting down...")
+			ln.Close()
 		}
 
 		if sig == syscall.SIGUSR2 {
+			log.Printf("got signal USR2, restarting...")
 			if pid, err := startNewProcess(ln); err != nil {
 				log.Printf("fail to start new process: %v", err)
 			} else {
-				//wait
 				ln.Close()
-				log.Printf("successfully restarted with new pid: %d", pid)
+				log.Printf("graceful restart with new pid: %d", pid)
 			}
 		}
 	}
@@ -113,14 +114,6 @@ func startNewProcess(listener *Listener) (int, error) {
 }
 
 func (srv *Server) getListener(addr string) (*Listener, error) {
-	if tcpListener, err := srv.getTCPListener(srv.httpServer.Addr); err != nil {
-		return newListener(tcpListener), nil
-	} else {
-		return nil, err
-	}
-}
-
-func (srv *Server) getTCPListener(addr string) (*net.TCPListener, error) {
 	var err error
 	var ln net.Listener
 	if srv.isGracefulRestart {
@@ -133,5 +126,6 @@ func (srv *Server) getTCPListener(addr string) (*net.TCPListener, error) {
 			return nil, fmt.Errorf("fail get Listener on net.Listen:%v", err)
 		}
 	}
-	return ln.(*net.TCPListener), nil
+
+	return newListener(ln.(*net.TCPListener)), nil
 }

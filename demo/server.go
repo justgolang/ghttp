@@ -11,7 +11,7 @@ func main() {
 		fmt.Fprintf(w, "hello world")
 	})
 
-	err := gracego.ListenAndServe(":8080", nil)
+	err := gracego.ListenAndServe(":8989", nil)
 	if err != nil {
 		fmt.Println(err)
 	}

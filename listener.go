@@ -20,6 +20,7 @@ func newListener(ln *net.TCPListener) *Listener {
 
 func (ln *Listener) Accept() (c net.Conn, err error) {
 	tc, err := ln.AcceptTCP()
+
 	if err != nil {
 		return
 	}
@@ -31,6 +32,7 @@ func (ln *Listener) Accept() (c net.Conn, err error) {
 		Conn:     tc,
 		listener: ln,
 	}
+
 	return conn, nil
 }
 
