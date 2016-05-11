@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/justgolang/gracego"
+	"github.com/justgolang/ghttp"
 	"net/http"
 )
 
@@ -11,7 +11,7 @@ func main() {
 		fmt.Fprintf(w, "hello world")
 	})
 
-	err := gracego.ListenAndServe(":8989", nil)
+	err := ghttp.ListenAndServe(":8989", nil)
 	if err != nil {
 		fmt.Println(err)
 	}

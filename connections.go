@@ -1,4 +1,4 @@
-package gracego
+package ghttp
 
 import (
 	"net"
@@ -11,12 +11,12 @@ type Connection struct {
 	closed bool
 }
 
-func (this *Connection) Close() error {
+func (cnt *Connection) Close() error {
 	fmt.Println("close......")
-	if !this.closed {
-		this.closed = true
-		this.listener.wg.Done()
+	if !cnt.closed {
+		cnt.closed = true
+		cnt.listener.wg.Done()
 	}
 
-	return this.Conn.Close()
+	return cnt.Conn.Close()
 }

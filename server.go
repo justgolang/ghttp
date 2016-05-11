@@ -1,6 +1,7 @@
-package gracego
+package ghttp
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -19,7 +20,7 @@ type (
 )
 
 const (
-	gracefulRestartKey = "gracego"
+	ghttpKey = "ghttp"
 )
 
 var (
@@ -30,9 +31,13 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	return newServer(addr, handler).ListenAndServe()
 }
 
+func ListenAndServeTLS(addr string, certFile string, keyFile string, handler http.Handler) error {
+	return newServer(addr, handler).ListenAndServeTLS(certFile, keyFile)
+}
+
 func newServer(addr string, handler http.Handler) *Server {
 	isGracefulRestart := false
-	if os.Getenv(gracefulRestartKey) != "" {
+	if os.Getenv(ghttpKey) != "" {
 		isGracefulRestart = true
 	}
 	return &Server{
@@ -45,7 +50,11 @@ func newServer(addr string, handler http.Handler) *Server {
 }
 
 func (srv *Server) ListenAndServe() error {
-	ln, err := srv.getListener(srv.httpServer.Addr)
+	addr := srv.httpServer.Addr
+	if addr == "" {
+		addr = ":http"
+	}
+	ln, err := srv.getListener(addr)
 	if err != nil {
 		return err
 	}
@@ -53,7 +62,6 @@ func (srv *Server) ListenAndServe() error {
 	go handleSignals(ln)
 	err = srv.httpServer.Serve(ln)
 
-	//listener close后　wait老连接处理完毕
 	log.Printf("waiting for connection close...")
 	ln.Wait()
 	log.Printf("all connection closed, process with pid %d is shutting down...", os.Getpid())
@@ -61,12 +69,59 @@ func (srv *Server) ListenAndServe() error {
 	return err
 }
 
+func (srv *Server) ListenAndServeTLS(certFile, keyFile string) error {
+	addr := srv.httpServer.Addr
+	if addr == "" {
+		addr = ":https"
+	}
+
+	config := &tls.Config{}
+	if srv.httpServer.TLSConfig != nil {
+		*config = *srv.httpServer.TLSConfig
+	}
+
+	if !strSliceContains(config.NextProtos, "http/1.1") {
+		config.NextProtos = append(config.NextProtos, "http/1.1")
+	}
+
+	var err error
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return err
+	}
+
+	ln, err := srv.getListener(addr)
+	if err != nil {
+		return err
+	}
+	ln.config = config
+
+	go handleSignals(ln)
+	err = srv.httpServer.Serve(ln)
+
+	log.Printf("waiting for connection close...")
+	ln.Wait()
+	log.Printf("all connection closed, process with pid %d is shutting down...", os.Getpid())
+
+	return err
+}
+
+func strSliceContains(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 func handleSignals(ln *Listener) {
 	signals := make(chan os.Signal)
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGUSR2)
 	for sig := range signals {
 		if sig == syscall.SIGTERM {
-			log.Printf("got signal TERM, shuting down...")
+			log.Printf("got signal TERM, shutting down...")
 			ln.Close()
 		}
 
@@ -75,14 +130,14 @@ func handleSignals(ln *Listener) {
 			if pid, err := startNewProcess(ln); err != nil {
 				log.Printf("fail to start new process: %v", err)
 			} else {
+				log.Printf("start new process with pid: %d", pid)
 				ln.Close()
-				log.Printf("graceful restart with new pid: %d", pid)
 			}
 		}
 	}
 }
 
-func startNewProcess(listener *Listener) (int, error) {
+func startNewProcess(ln *Listener) (int, error) {
 	argv0, err := exec.LookPath(os.Args[0])
 	if err != nil {
 		log.Println("fail")
@@ -90,14 +145,14 @@ func startNewProcess(listener *Listener) (int, error) {
 	}
 
 	// Set a flag for the new process start process
-	os.Setenv(gracefulRestartKey, "1")
+	os.Setenv(ghttpKey, "1")
 
 	var env []string
 	for _, v := range os.Environ() {
 		env = append(env, v)
 	}
 
-	file, err := listener.File()
+	file, err := ln.File()
 	if err != nil {
 		return 0, nil
 	}

@@ -1,13 +1,15 @@
-package gracego
+package ghttp
 
 import (
 	"net"
 	"sync"
 	"time"
+	"crypto/tls"
 )
 
 type Listener struct {
 	*net.TCPListener
+	config *tls.Config
 	wg *sync.WaitGroup
 }
 
