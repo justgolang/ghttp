@@ -3,8 +3,10 @@ Package ghttp provides a graceful shutdown and restart for Go.
 Usage
 =============
 Just use `ghttp.ListenAndServe` instead of `http.ListenAndServe`.  
-Send `SIGUSR2` signal to a go process that is using ghttp in order to graceful restart and  send `SIGTERM` in order to graceful shutdonw.
+Send `SIGUSR2` signal to a go process that is using ghttp in order to graceful restart and  send `SIGTERM` in order to graceful shutdown.  
+
     package main
+    
     import (
         "fmt"
         "github.com/justgolang/ghttp"
@@ -21,7 +23,6 @@ Send `SIGUSR2` signal to a go process that is using ghttp in order to graceful r
             fmt.Println(err)
         }
     }
-
 
 Installation
 =============
